@@ -5,10 +5,12 @@
  * Provides methods for getting, creating, and linking user wallets.
  */
 
-import { walletService, WalletInfo } from './wallet-service.js';
+import { walletService, WalletInfo, SocialAccount as WalletServiceSocialAccount } from './wallet-service.js';
+import { transactionService } from './transaction-service.js';
 import { randomUUID, randomBytes, createHash } from 'crypto';
 import { SERVER_CONFIG, AUTH_CONFIG } from '../config/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
+import { Database, UserProfile, SocialAccount as DatabaseSocialAccount } from '../database/index.js';
 
 interface User {
   id: string;
@@ -25,6 +27,11 @@ class UserService {
   private users: Map<string, User> = new Map();
   private usersByApiKey: Map<string, User> = new Map();
   private initialized = false;
+  private db: Database;
+  
+  constructor() {
+    this.db = new Database();
+  }
 
   /**
    * Initialize the user service
@@ -204,6 +211,132 @@ class UserService {
       return await walletService.unlinkSocialAccount(platform, platformId);
     } catch (error) {
       return false;
+    }
+  }
+
+  /**
+   * Get a complete user profile with wallet and social accounts
+   * @param platform Platform (twitter, telegram, discord)
+   * @param platformId User's unique ID on the platform
+   * @returns Complete user profile or null if not found
+   */
+  async getUserProfileBySocialAccount(platform: string, platformId: string): Promise<UserProfile | null> {
+    try {
+      if (!this.db.isConnected()) {
+        await this.db.connect();
+      }
+      
+      // Get the wallet associated with this social account
+      const wallet = await walletService.getWalletBySocialAccount(platform, platformId);
+      
+      if (!wallet) {
+        return null;
+      }
+      
+      // Get all social accounts linked to this wallet
+      const walletSocialAccounts = await walletService.getSocialAccountsForWallet(wallet.publicKey);
+      
+      // Transform to database format
+      const socialAccounts: DatabaseSocialAccount[] = walletSocialAccounts.map(account => ({
+        platform: account.platform as 'twitter' | 'telegram' | 'discord',
+        platform_id: account.platformId,
+        wallet_id: account.walletId,
+        created_at: account.createdAt
+      }));
+      
+      // Get recent transactions for this wallet
+      const transactions = await transactionService.getTransactionsForWallet(wallet.id, 5, 0);
+      
+      return {
+        wallets: [{
+          id: wallet.id,
+          public_key: wallet.publicKey,
+          is_custodial: wallet.isCustodial,
+          label: wallet.label,
+          created_at: wallet.createdAt,
+          updated_at: wallet.updatedAt
+        }],
+        socialAccounts,
+        transactions
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get a user profile by wallet address
+   * @param walletAddress Wallet public key
+   * @returns Complete user profile or null if not found
+   */
+  async getUserProfileByWalletAddress(walletAddress: string): Promise<UserProfile | null> {
+    try {
+      if (!this.db.isConnected()) {
+        await this.db.connect();
+      }
+      
+      // Get wallet by public key
+      const wallet = await walletService.getWalletByPublicKey(walletAddress);
+      
+      if (!wallet) {
+        return null;
+      }
+      
+      // Get all social accounts linked to this wallet
+      const walletSocialAccounts = await walletService.getSocialAccountsForWallet(walletAddress);
+      
+      // Transform to database format
+      const socialAccounts: DatabaseSocialAccount[] = walletSocialAccounts.map(account => ({
+        platform: account.platform as 'twitter' | 'telegram' | 'discord',
+        platform_id: account.platformId,
+        wallet_id: account.walletId,
+        created_at: account.createdAt
+      }));
+      
+      // Get recent transactions for this wallet
+      const transactions = await transactionService.getTransactionsForWallet(wallet.id, 5, 0);
+      
+      return {
+        wallets: [{
+          id: wallet.id,
+          public_key: wallet.publicKey,
+          is_custodial: wallet.isCustodial,
+          label: wallet.label,
+          created_at: wallet.createdAt,
+          updated_at: wallet.updatedAt
+        }],
+        socialAccounts,
+        transactions
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get all wallets for a user (across all social platforms)
+   * @param userId User ID (typically email or platform-specific ID)
+   * @returns Array of wallets
+   */
+  async getAllUserWallets(userId: string): Promise<WalletInfo[]> {
+    try {
+      if (!walletService.isInitialized()) {
+        await walletService.initialize();
+      }
+      
+      // This is a simplified approach - in a real implementation,
+      // we would need to query by user ID across platforms
+      const user = this.getUserById(userId);
+      if (!user) {
+        return [];
+      }
+      
+      // For now, just return wallets associated with the user's email domain
+      // This is a placeholder implementation
+      const emailDomain = user.email.split('@')[1];
+      return await walletService.getAllWallets();
+    } catch (error) {
+      return [];
     }
   }
 }

@@ -281,25 +281,147 @@ export class SimpleWalletManager {
 
   /**
    * Get a wallet by its public key
+   * @param publicKey Wallet public key
+   * @returns Wallet info or null if not found
    */
-  async getWallet(publicKey: string): Promise<WalletInfo | null> {
+  async getWalletByPublicKey(publicKey: string): Promise<WalletInfo | null> {
     if (!this.initialized || !this.db) {
       throw new Error('Wallet service not initialized');
     }
     
     try {
-      const wallet = await this.db.get('SELECT id FROM wallets WHERE public_key = ?', [publicKey]);
+      // Get wallet by public key
+      const wallet = await this.db.get(
+        'SELECT * FROM wallets WHERE public_key = ?',
+        [publicKey]
+      );
       
       if (!wallet) {
         return null;
       }
-
-      return this.getWalletById(wallet.id);
+      
+      // Get all social accounts linked to this wallet
+      const socialAccounts = await this.db.all(
+        'SELECT * FROM social_accounts WHERE wallet_id = ?',
+        [wallet.id]
+      );
+      
+      // Transform to our expected format
+      const socialAccountsFormatted: SocialAccount[] = socialAccounts.map(account => ({
+        id: account.id,
+        platform: account.platform,
+        platformId: account.platform_id,
+        walletId: account.wallet_id,
+        createdAt: account.created_at
+      }));
+      
+      return {
+        id: wallet.id,
+        publicKey: wallet.public_key,
+        isCustodial: Boolean(wallet.is_custodial),
+        label: wallet.label,
+        encryptedPrivateKey: wallet.encrypted_private_key,
+        createdAt: wallet.created_at,
+        updatedAt: wallet.updated_at,
+        socialAccounts: socialAccountsFormatted
+      };
     } catch (error) {
-      throw error;
+      console.error('Error getting wallet by public key:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get all social accounts linked to a wallet
+   * @param publicKey Wallet public key
+   * @returns Array of social accounts
+   */
+  async getSocialAccountsForWallet(publicKey: string): Promise<SocialAccount[]> {
+    if (!this.initialized || !this.db) {
+      throw new Error('Wallet service not initialized');
+    }
+    
+    try {
+      // First get the wallet ID
+      const wallet = await this.db.get(
+        'SELECT id FROM wallets WHERE public_key = ?',
+        [publicKey]
+      );
+      
+      if (!wallet) {
+        return [];
+      }
+      
+      // Get all social accounts for this wallet
+      const socialAccounts = await this.db.all(
+        'SELECT * FROM social_accounts WHERE wallet_id = ?',
+        [wallet.id]
+      );
+      
+      // Transform to our expected format
+      return socialAccounts.map(account => ({
+        id: account.id,
+        platform: account.platform,
+        platformId: account.platform_id,
+        walletId: account.wallet_id,
+        createdAt: account.created_at
+      }));
+    } catch (error) {
+      console.error('Error getting social accounts for wallet:', error);
+      return [];
     }
   }
   
+  /**
+   * Get all wallets in the system
+   * @returns Array of all wallet info objects
+   */
+  async getAllWallets(): Promise<WalletInfo[]> {
+    if (!this.initialized || !this.db) {
+      throw new Error('Wallet service not initialized');
+    }
+    
+    try {
+      // Get all wallets
+      const wallets = await this.db.all('SELECT * FROM wallets');
+      
+      // Get all social accounts for each wallet
+      const result: WalletInfo[] = [];
+      
+      for (const wallet of wallets) {
+        const socialAccounts = await this.db.all(
+          'SELECT * FROM social_accounts WHERE wallet_id = ?',
+          [wallet.id]
+        );
+        
+        // Transform to our expected format
+        const socialAccountsFormatted: SocialAccount[] = socialAccounts.map(account => ({
+          id: account.id,
+          platform: account.platform,
+          platformId: account.platform_id,
+          walletId: account.wallet_id,
+          createdAt: account.created_at
+        }));
+        
+        result.push({
+          id: wallet.id,
+          publicKey: wallet.public_key,
+          isCustodial: Boolean(wallet.is_custodial),
+          label: wallet.label,
+          encryptedPrivateKey: wallet.encrypted_private_key,
+          createdAt: wallet.created_at,
+          updatedAt: wallet.updated_at,
+          socialAccounts: socialAccountsFormatted
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error getting all wallets:', error);
+      return [];
+    }
+  }
+
   /**
    * Get a wallet by social account
    */

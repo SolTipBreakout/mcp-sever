@@ -110,6 +110,43 @@ export const optionalApiKeyAuth = () => {
   };
 };
 
+/**
+ * Middleware to require a valid API key
+ * Use this directly in routes that require authentication
+ */
+export const requireApiKey = (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const config = getAuthConfig();
+    
+    // Skip validation if auth is disabled
+    if (!config.enabled) {
+      return next();
+    }
+    
+    // Extract API key from header
+    const apiKey = req.get(config.headerName);
+    
+    // If no API key provided
+    if (!apiKey) {
+      throw new ApiError(401, 'API key is required');
+    }
+    
+    // Validate the API key against allowed keys
+    if (!config.apiKeys.includes(apiKey)) {
+      throw new ApiError(403, 'Invalid API key');
+    }
+    
+    // Store the API key on the request object
+    (req as AuthenticatedRequest).apiKey = apiKey;
+    (req as AuthenticatedRequest).isAuthenticated = true;
+    
+    // API key is valid, proceed to next middleware
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Extend Express Request interface to include authentication property
 declare global {
   namespace Express {

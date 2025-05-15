@@ -3,6 +3,7 @@ import { apiKeyAuth } from '../middleware/auth.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { userService } from '../services/user-service.js';
 import { walletService } from '../services/wallet-service.js';
+import { transactionService } from '../services/transaction-service.js';
 
 export const userRoutes: Router = express.Router();
 
@@ -15,24 +16,18 @@ userRoutes.use(apiKeyAuth());
  */
 userRoutes.get('/profile', async (req, res, next) => {
   try {
-    const userId = (req as any).userId;
-    if (!userId) {
-      throw new ApiError(401, 'Unauthorized');
-    }
+    const user = (req as any).user;
     
-    const user = await userService.getUserById(userId);
     if (!user) {
-      throw new ApiError(404, 'User not found');
+      throw new ApiError(401, 'Unauthorized - User not found');
     }
     
     res.json({
-      status: 'success',
+      success: true,
       data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          createdAt: user.createdAt
-        }
+        id: user.id,
+        email: user.email,
+        createdAt: user.createdAt
       }
     });
   } catch (error) {
@@ -49,15 +44,15 @@ userRoutes.get('/wallet/social', async (req, res, next) => {
     const { platform, platformId } = req.query;
     
     if (!platform || !platformId) {
-      throw new ApiError(400, 'Missing required parameters: platform and platformId');
+      throw new ApiError(400, 'Platform and platformId are required');
     }
     
-    // Validate platform type
-    if (!['twitter', 'telegram', 'discord', 'default'].includes(platform as string)) {
-      throw new ApiError(400, 'Invalid platform. Must be one of: twitter, telegram, discord, default');
+    // Initialize wallet service if needed
+    if (!walletService.isInitialized()) {
+      await walletService.initialize();
     }
     
-    // Get the wallet associated with this social account
+    // Get wallet for the social account
     const wallet = await walletService.getWalletBySocialAccount(
       platform as string,
       platformId as string
@@ -68,12 +63,8 @@ userRoutes.get('/wallet/social', async (req, res, next) => {
     }
     
     res.json({
-      status: 'success',
-      wallet: {
-        publicKey: wallet.publicKey,
-        isCustodial: wallet.isCustodial,
-        label: wallet.label
-      }
+      success: true,
+      data: wallet
     });
   } catch (error) {
     next(error);
@@ -89,38 +80,24 @@ userRoutes.post('/wallet/get-or-create', async (req, res, next) => {
     const { platform, platformId, label } = req.body;
     
     if (!platform || !platformId) {
-      throw new ApiError(400, 'Missing required parameters: platform and platformId');
+      throw new ApiError(400, 'Platform and platformId are required');
     }
     
-    // Validate platform type
-    if (!['twitter', 'telegram', 'discord', 'default'].includes(platform)) {
-      throw new ApiError(400, 'Invalid platform. Must be one of: twitter, telegram, discord, default');
+    // Initialize user service if needed
+    if (!userService.isInitialized()) {
+      await userService.initialize();
     }
     
-    // Check if wallet already exists for this social account
-    let wallet = await walletService.getWalletBySocialAccount(platform, platformId);
-    
-    // If no wallet exists, create a new one
-    if (!wallet) {
-      try {
-        wallet = await walletService.createWallet(
-          platform,
-          platformId,
-          label || `${platform}-${platformId}`
-        );
-      } catch (error) {
-        console.error('Error creating wallet:', error);
-        throw new ApiError(500, 'Failed to create wallet');
-      }
-    }
+    // Get or create wallet
+    const wallet = await userService.getOrCreateUserWallet(
+      platform,
+      platformId,
+      label
+    );
     
     res.json({
-      status: 'success',
-      wallet: {
-        publicKey: wallet.publicKey,
-        isCustodial: wallet.isCustodial,
-        label: wallet.label
-      }
+      success: true,
+      data: wallet
     });
   } catch (error) {
     next(error);
@@ -136,44 +113,25 @@ userRoutes.post('/wallet/link', async (req, res, next) => {
     const { platform, platformId, walletPublicKey } = req.body;
     
     if (!platform || !platformId || !walletPublicKey) {
-      throw new ApiError(400, 'Missing required parameters: platform, platformId, and walletPublicKey');
+      throw new ApiError(400, 'Platform, platformId, and walletPublicKey are required');
     }
     
-    // Validate platform type
-    if (!['twitter', 'telegram', 'discord', 'default'].includes(platform)) {
-      throw new ApiError(400, 'Invalid platform. Must be one of: twitter, telegram, discord, default');
+    // Initialize user service if needed
+    if (!userService.isInitialized()) {
+      await userService.initialize();
     }
     
-    // Check if user already has a wallet linked to this platform account
-    const existingWallet = await walletService.getWalletBySocialAccount(platform, platformId);
-    if (existingWallet) {
-      throw new ApiError(409, 'This social account is already linked to a wallet. Please unlink it first.');
-    }
+    // Link account to wallet
+    const wallet = await userService.linkAccountToWallet(
+      platform,
+      platformId,
+      walletPublicKey
+    );
     
-    // Link social account to the provided wallet
-    try {
-      const wallet = await walletService.linkSocialAccountToWallet(
-        platform,
-        platformId,
-        walletPublicKey
-      );
-      
-      res.json({
-        status: 'success',
-        message: 'Social account linked to wallet successfully',
-        wallet: {
-          publicKey: wallet.publicKey,
-          isCustodial: wallet.isCustodial,
-          label: wallet.label
-        }
-      });
-    } catch (error) {
-      console.error('Error linking wallet:', error);
-      if (error instanceof Error && error.message.includes('not found')) {
-        throw new ApiError(404, 'Wallet not found with the provided public key');
-      }
-      throw new ApiError(500, 'Failed to link social account to wallet');
-    }
+    res.json({
+      success: true,
+      data: wallet
+    });
   } catch (error) {
     next(error);
   }
@@ -185,16 +143,23 @@ userRoutes.post('/wallet/link', async (req, res, next) => {
  */
 userRoutes.get('/wallets', async (req, res, next) => {
   try {
-    const userId = (req as any).userId;
-    if (!userId) {
-      throw new ApiError(401, 'Unauthorized');
+    const user = (req as any).user;
+    
+    if (!user) {
+      throw new ApiError(401, 'Unauthorized - User not found');
     }
     
-    const wallets = await walletService.getWalletsForUser(userId);
+    // Initialize user service if needed
+    if (!userService.isInitialized()) {
+      await userService.initialize();
+    }
+    
+    // Get all wallets for this user
+    const wallets = await userService.getAllUserWallets(user.id);
     
     res.json({
-      status: 'success',
-      data: { wallets }
+      success: true,
+      data: wallets
     });
   } catch (error) {
     next(error);
@@ -207,16 +172,179 @@ userRoutes.get('/wallets', async (req, res, next) => {
  */
 userRoutes.post('/wallets', async (req, res, next) => {
   try {
-    const userId = (req as any).userId;
-    if (!userId) {
-      throw new ApiError(401, 'Unauthorized');
+    const { platform, platformId, label } = req.body;
+    
+    if (!platform || !platformId) {
+      throw new ApiError(400, 'Platform and platformId are required');
     }
     
-    const wallet = await walletService.createWalletForUser(userId);
+    // Initialize user service if needed
+    if (!userService.isInitialized()) {
+      await userService.initialize();
+    }
     
-    res.status(201).json({
-      status: 'success',
-      data: { wallet }
+    // Create a new wallet
+    const wallet = await userService.createUserWallet(
+      platform,
+      platformId,
+      label
+    );
+    
+    res.json({
+      success: true,
+      data: wallet
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route GET /user/transactions/:walletAddress
+ * @desc Get transaction history for a wallet
+ */
+userRoutes.get('/transactions/:walletAddress', async (req, res, next) => {
+  try {
+    const { walletAddress } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+    const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
+
+    if (!walletAddress) {
+      throw new ApiError(400, 'Wallet address is required');
+    }
+
+    // Initialize services
+    if (!walletService.isInitialized()) {
+      await walletService.initialize();
+    }
+    if (!transactionService.isInitialized()) {
+      await transactionService.initialize();
+    }
+
+    // Get wallet by public key
+    const wallet = await walletService.getWalletByPublicKey(walletAddress);
+    
+    if (!wallet) {
+      throw new ApiError(404, 'Wallet not found');
+    }
+
+    // Get transactions for wallet
+    const transactions = await transactionService.getTransactionsForWallet(wallet.id, limit, offset);
+    const count = await transactionService.getTransactionCountForWallet(wallet.id);
+
+    res.json({
+      success: true,
+      data: {
+        transactions,
+        count,
+        limit,
+        offset
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route GET /user/transaction/:signature
+ * @desc Get details of a specific transaction
+ */
+userRoutes.get('/transaction/:signature', async (req, res, next) => {
+  try {
+    const { signature } = req.params;
+
+    if (!signature) {
+      throw new ApiError(400, 'Transaction signature is required');
+    }
+
+    // Initialize transaction service
+    if (!transactionService.isInitialized()) {
+      await transactionService.initialize();
+    }
+
+    // Get transaction by signature
+    const transaction = await transactionService.getTransactionBySignature(signature);
+
+    if (!transaction) {
+      throw new ApiError(404, 'Transaction not found');
+    }
+
+    res.json({
+      success: true,
+      data: transaction
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route GET /user/profile/social
+ * @desc Get complete user profile with wallet, social accounts, and transaction history
+ */
+userRoutes.get('/profile/social', async (req, res, next) => {
+  try {
+    const { platform, platformId } = req.query;
+    
+    if (!platform || !platformId) {
+      throw new ApiError(400, 'Platform and platformId are required');
+    }
+    
+    // Initialize user service
+    if (!userService.isInitialized()) {
+      await userService.initialize();
+    }
+    
+    // Get user profile
+    const profile = await userService.getUserProfileBySocialAccount(
+      platform as string,
+      platformId as string
+    );
+    
+    if (!profile) {
+      throw new ApiError(404, 'User profile not found');
+    }
+    
+    res.json({
+      success: true,
+      data: profile
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route GET /user/social-accounts/:walletAddress
+ * @desc Get all social accounts linked to a wallet
+ */
+userRoutes.get('/social-accounts/:walletAddress', async (req, res, next) => {
+  try {
+    const { walletAddress } = req.params;
+    
+    if (!walletAddress) {
+      throw new ApiError(400, 'Wallet address is required');
+    }
+    
+    // Initialize wallet service
+    if (!walletService.isInitialized()) {
+      await walletService.initialize();
+    }
+    
+    // Get wallet by public key first to validate it exists
+    const wallet = await walletService.getWalletByPublicKey(walletAddress);
+    
+    if (!wallet) {
+      throw new ApiError(404, 'Wallet not found');
+    }
+    
+    // Get social accounts for this wallet
+    const socialAccounts = await walletService.getSocialAccountsForWallet(walletAddress);
+    
+    res.json({
+      success: true,
+      data: socialAccounts
     });
   } catch (error) {
     next(error);
