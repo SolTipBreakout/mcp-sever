@@ -1,0 +1,52 @@
+{
+  "name": "mcpendpoint",
+  "version": "1.0.0",
+  "description": "HTTP endpoint for Solana MCP server",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "watch": "tsc --watch",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "debug": "npx @modelcontextprotocol/inspector node dist/index.js"
+  },
+  "keywords": [
+    "solana",
+    "mcp",
+    "blockchain",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.8.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.2",
+    "@privy-io/server-auth": "^1.22.0",
+    "@solana/kit": "^2.1.1",
+    "@solana/spl-token": "^0.4.13",
+    "@solana/web3.js": "^1.98.2",
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.15.17",
+    "bs58": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "express-validator": "^7.2.1",
+    "helmet": "^8.1.0",
+    "joi": "^17.13.3",
+    "morgan": "^1.10.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3",
+    "winston": "^3.17.0",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.18",
+    "@types/morgan": "^1.9.9"
+  }
+}

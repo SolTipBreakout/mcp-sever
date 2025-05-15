@@ -1,0 +1,56 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+- **ESM Module Configuration**
+  - Always use `.js` extension in import statements even for TypeScript files
+    ```typescript
+    // ✅ DO: Include .js extension in imports
+    import { logger } from '../utils/logger.js';
+    
+    // ❌ DON'T: Skip extensions in ESM context
+    import { logger } from '../utils/logger';
+    ```
+  - Set `"type": "module"` in package.json for ESM compatibility
+  - Configure tsconfig.json with `"module": "NodeNext"` and `"moduleResolution": "NodeNext"`
+
+- **Solana MCP Server Integration**
+  - Use typed parameter destructuring in tool handlers
+    ```typescript
+    // ✅ DO: Properly type destructured parameters
+    async ({ signature }: { signature: string }) => {
+      // Handler implementation
+    }
+    
+    // ❌ DON'T: Leave parameters untyped
+    async ({ signature }) => {
+      // Handler implementation
+    }
+    ```
+  - Initialize MCP server with appropriate error handling
+    ```typescript
+    // ✅ DO: Use try/catch and proper logging
+    try {
+      const server = setupSolanaMcpServer();
+      await server.connect(transport);
+      logger.info('MCP server initialized successfully');
+    } catch (error) {
+      logger.error('Failed to initialize MCP server', error);
+    }
+    ```
+
+- **Express Integration**
+  - Use standard middleware order: helmet → cors → body parsers → custom middleware → routes → error handler
+  - Include graceful shutdown handling for clean server termination
+  - Make route setup modular with separate files for different API sections
+
+- **Error Handling**
+  - Use custom ApiError class for standardized error responses
+  - Implement middleware to handle different error types consistently
+  - Log errors with appropriate context (request details, stack trace)
+
+- **Environment Configuration**
+  - Create a centralized config module with relevant sections
+  - Validate required environment variables early in application startup
+  - Use sensible defaults for non-critical configuration
