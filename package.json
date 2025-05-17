@@ -13,7 +13,7 @@
     "debug": "npx @modelcontextprotocol/inspector node dist/index.js"
   },
   "engines": {
-    "node": "23.11.0"
+    "node": ">=20.19.2"
   },
   "keywords": [
     "solana",
