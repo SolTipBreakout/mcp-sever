@@ -1,13 +1,13 @@
 # Use the default provider (Node.js) and ensure pnpm is available
 [phases.setup]
-nixPkgs = ['nodejs_23', 'pnpm', 'sqlite', 'gcc', 'python3', 'gnumake']
+nixPkgs = ['nodejs_23', 'pnpm', 'sqlite', 'gcc', 'python3', 'gnumake', 'python3Packages.setuptools']
 
 [phases.install]
 cmds = ['pnpm install --frozen-lockfile']
 
 [phases.build]
 cmds = [
-  'pnpm rebuild sqlite3', 
+  'npm rebuild sqlite3', 
   'pnpm build'
 ]
 cacheDirectories = ['node_modules/.cache']
