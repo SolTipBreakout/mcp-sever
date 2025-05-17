@@ -17,12 +17,22 @@ services:
     environment:
       - NODE_ENV=production
       - SQLITE_PATH=/app/database/wallet-data.db
+      - SQLITE_FORCE_BUILD=1
+      - npm_config_build_from_source=true
+      - npm_config_sqlite_libname=sqlite3
+      - npm_config_target_arch=x64
+      - SKIP_WRTC_INSTALL_FAILURE=true
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    privileged: true  # For WebRTC device access
 
 volumes:
   db-data:

@@ -13,6 +13,8 @@ if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
   echo "  -p, --production   Deploy in production mode (detached)"
   echo "  -r, --rebuild      Force rebuild of containers"
   echo "  -b, --backup       Create a database backup before deployment"
+  echo "  -s, --sqlite       Rebuild SQLite3 module after deployment"
+  echo "  -n, --native       Rebuild all native modules (SQLite3, WebRTC, etc.)"
   echo "  -h, --help         Display this help message"
   exit 0
 fi
@@ -21,6 +23,8 @@ fi
 PRODUCTION=false
 REBUILD=false
 BACKUP=false
+REBUILD_SQLITE=false
+REBUILD_NATIVE=false
 
 # Parse arguments
 for arg in "$@"; do
@@ -35,6 +39,14 @@ for arg in "$@"; do
       ;;
     -b|--backup)
       BACKUP=true
+      shift
+      ;;
+    -s|--sqlite)
+      REBUILD_SQLITE=true
+      shift
+      ;;
+    -n|--native)
+      REBUILD_NATIVE=true
       shift
       ;;
     *)
@@ -104,6 +116,44 @@ if [ "$PRODUCTION" = true ]; then
 else
   echo "🛠️ Deploying in development mode..."
   docker compose up $BUILD_ARG
+fi
+
+# Rebuild native modules if requested
+if [ "$REBUILD_NATIVE" = true ]; then
+  echo "🔧 Rebuilding all native modules..."
+  if docker ps | grep -q mcpendpoint; then
+    echo "🧰 Running comprehensive native module rebuild..."
+    docker exec mcpendpoint sh -c "/app/rebuild-native-modules.sh"
+    if [ $? -eq 0 ]; then
+      echo "✅ Native modules rebuilt successfully!"
+      
+      # Restart container to apply changes
+      echo "🔄 Restarting container to apply changes..."
+      docker restart mcpendpoint
+    else
+      echo "❌ Failed to rebuild native modules."
+    fi
+  else
+    echo "❌ Cannot rebuild modules: mcpendpoint container not running."
+  fi
+# Only rebuild SQLite if not rebuilding all native modules
+elif [ "$REBUILD_SQLITE" = true ]; then
+  echo "🔧 Rebuilding SQLite3 module..."
+  if docker ps | grep -q mcpendpoint; then
+    echo "🧰 Using npm to rebuild SQLite3 native module..."
+    docker exec mcpendpoint sh -c "/app/rebuild-sqlite3.sh"
+    if [ $? -eq 0 ]; then
+      echo "✅ SQLite3 rebuilt successfully!"
+      
+      # Restart container to apply changes
+      echo "🔄 Restarting container to apply changes..."
+      docker restart mcpendpoint
+    else
+      echo "❌ Failed to rebuild SQLite3 module."
+    fi
+  else
+    echo "❌ Cannot rebuild SQLite3: mcpendpoint container not running."
+  fi
 fi
 
 echo ""
