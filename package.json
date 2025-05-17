@@ -12,9 +12,6 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "debug": "npx @modelcontextprotocol/inspector node dist/index.js"
   },
-  "engines": {
-    "node": ">=20.19.2"
-  },
   "keywords": [
     "solana",
     "mcp",
