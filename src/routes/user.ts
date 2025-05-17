@@ -349,4 +349,47 @@ userRoutes.get('/social-accounts/:walletAddress', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+/**
+ * @route POST /user/wallet/export-private-key
+ * @desc Export encrypted private key for a wallet (requires authentication)
+ */
+userRoutes.post('/wallet/export-private-key', async (req, res, next) => {
+  try {
+    const { walletPublicKey } = req.body;
+    
+    if (!walletPublicKey) {
+      throw new ApiError(400, 'Wallet public key is required');
+    }
+    
+    // Initialize wallet service if needed
+    if (!walletService.isInitialized()) {
+      await walletService.initialize();
+    }
+    
+    // Get wallet by public key first
+    const wallet = await walletService.getWalletByPublicKey(walletPublicKey);
+    
+    if (!wallet) {
+      throw new ApiError(404, 'Wallet not found');
+    }
+    
+    // Check if wallet has an encrypted private key
+    if (!wallet.encryptedPrivateKey) {
+      throw new ApiError(400, 'No private key available for this wallet');
+    }
+    
+    // Decrypt the private key
+    const privateKey =  walletService.decryptPrivateKey(walletPublicKey);
+    
+    res.json({
+      success: true,
+      data: {
+        privateKey
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 }); 

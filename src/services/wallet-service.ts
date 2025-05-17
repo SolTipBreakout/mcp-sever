@@ -559,7 +559,7 @@ export class SimpleWalletManager {
   /**
    * Decrypt a private key
    */
-  private decryptPrivateKey(encryptedPrivateKey: string): string {
+   decryptPrivateKey(encryptedPrivateKey: string): string {
     const [ivHex, encryptedHex] = encryptedPrivateKey.split(':');
     const iv = Buffer.from(ivHex, 'hex');
     const decipher = crypto.createDecipheriv(
