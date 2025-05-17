@@ -20,8 +20,7 @@ services:
       - SQLITE_FORCE_BUILD=1
       - npm_config_build_from_source=true
       - npm_config_sqlite_libname=sqlite3
-      - npm_config_target_arch=x64
-      - SKIP_WRTC_INSTALL_FAILURE=true
+      - YARN_CACHE_FOLDER=/tmp/.yarn-cache
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 30s
@@ -32,7 +31,6 @@ services:
       resources:
         limits:
           memory: 1G
-    privileged: true  # For WebRTC device access
 
 volumes:
   db-data:
