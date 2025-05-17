@@ -381,7 +381,7 @@ userRoutes.post('/wallet/export-private-key', async (req, res, next) => {
     }
     
     // Decrypt the private key
-    const privateKey =  walletService.decryptPrivateKey(walletPublicKey);
+    const privateKey =  walletService.decryptPrivateKey(wallet.encryptedPrivateKey);
     
     res.json({
       success: true,
@@ -393,3 +393,30 @@ userRoutes.post('/wallet/export-private-key', async (req, res, next) => {
     next(error);
   }
 }); 
+
+/**
+ * @route GET /user/profile/:walletAddress
+ * @desc Get user profile by wallet address
+ */
+userRoutes.get('/profile/:walletAddress', async (req, res, next) => {
+  try {
+    const { walletAddress } = req.params;
+    
+    if (!walletAddress) {
+      throw new ApiError(400, 'Wallet address is required');
+    }
+    
+    const profile = await userService.getUserProfileByWalletAddress(walletAddress);
+    
+    if (!profile) {
+      throw new ApiError(404, 'User profile not found, please create one');
+    }
+    
+    res.json({
+      success: true,
+      data: profile
+    });
+  } catch (error) {
+    next(error);
+  }
+});
